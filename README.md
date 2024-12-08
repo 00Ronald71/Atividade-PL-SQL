@@ -1,133 +1,48 @@
--- Drop Tables (caso já existam)
-DROP TABLE ALUNO CASCADE CONSTRAINTS;
-DROP TABLE CURSO CASCADE CONSTRAINTS;
-DROP TABLE DISCIPLINA CASCADE CONSTRAINTS;
-DROP TABLE PROFESSOR CASCADE CONSTRAINTS;
-DROP TABLE TURMA CASCADE CONSTRAINTS;
-DROP TABLE MATRICULA CASCADE CONSTRAINTS;
+Sistema de Gestão Acadêmica:
+Este repositório tem alguns pacotes PL/SQL para trabalhar com alunos, disciplinas e professores no Oracle. A ideia é praticar procedures, functions e cursores de forma simples e direta.
 
--- Criação das tabelas
-CREATE TABLE ALUNO ( 
-  ID NUMBER PRIMARY KEY, 
-  NOME VARCHAR2(100) NOT NULL, 
-  DATA_NASCIMENTO DATE NOT NULL 
-);
+O que cada pacote faz:
 
-CREATE TABLE CURSO ( 
-  ID NUMBER PRIMARY KEY, 
-  NOME VARCHAR2(100) NOT NULL 
-);
+PKG_ALUNO:
+• excluir_aluno(p_id_aluno NUMBER): Apaga o aluno pelo ID e remove as matrículas relacionadas.
+• Cursor listar_maiores_de_18: Mostra nome e data de nascimento dos alunos maiores de 18 anos.
+• alunos_por_curso(p_id_curso NUMBER) (Function): Dá uma lista dos alunos de um curso específico.
 
-CREATE TABLE DISCIPLINA ( 
-  ID NUMBER PRIMARY KEY, 
-  NOME VARCHAR2(100) NOT NULL, 
-  DESCRICAO VARCHAR2(500), 
-  CARGA_HORARIA NUMBER NOT NULL 
-);
+PKG_DISCIPLINA:
+• cadastrar_disciplina(p_nome, p_descricao, p_carga_horaria): Cadastra uma disciplina com as informações fornecidas.
+• Cursor total_alunos_por_disciplina: Mostra disciplinas com mais de 10 alunos matriculados.
+• media_idade_por_disciplina(p_id_disciplina NUMBER) (Function): Calcula a média de idade dos alunos da disciplina indicada.
+• listar_alunos_por_disciplina(p_id_disciplina NUMBER) (Procedure): Mostra os alunos matriculados na disciplina.
 
-CREATE TABLE PROFESSOR ( 
-  ID NUMBER PRIMARY KEY, 
-  NOME VARCHAR2(100) NOT NULL 
-);
+PKG_PROFESSOR:
+• Cursor total_turmas_por_professor: Lista professores e quantas turmas eles têm (só os que têm mais de uma turma aparecem).
+• total_turmas_de_professor(p_id_professor NUMBER) (Function):Conta quantas turmas um professor tem.
+• professor_de_disciplina(p_id_disciplina NUMBER) (Function): Diz quem é o professor responsável por uma disciplina.
 
-CREATE TABLE TURMA ( 
-  ID NUMBER PRIMARY KEY, 
-  ID_DISCIPLINA NUMBER REFERENCES DISCIPLINA(ID), 
-  ANO NUMBER NOT NULL, 
-  SEMESTRE VARCHAR2(10) NOT NULL 
-);
+Como usar:
+• Configurar o ambiente: Antes de rodar o script, garanta que as tabelas (alunos, disciplinas, professores, matriculas, turmas) já existem no banco.
 
-CREATE TABLE MATRICULA ( 
-  ID_ALUNO NUMBER REFERENCES ALUNO(ID), 
-  ID_TURMA NUMBER REFERENCES TURMA(ID), 
-  PRIMARY KEY (ID_ALUNO, ID_TURMA) 
-);
+Rodar o script:
+• Rode o arquivo script.sql assim: @script.sql
+• Testar os pacotes: Depois de criar os pacotes, você pode testar os procedimentos e funções no Oracle.
 
-BEGIN 
-  -- Inserir aluno 
-  INSERT INTO ALUNO (ID, NOME, DATA_NASCIMENTO)  
-    VALUES (1, 'João Silva', TO_DATE('2000-05-10', 'YYYY-MM-DD')); 
- 
-  -- Inserir curso 
-  INSERT INTO CURSO (ID, NOME)  
-    VALUES (1, 'Engenharia de Software'); 
- 
-  -- Inserir disciplina 
-  INSERT INTO DISCIPLINA (ID, NOME, DESCRICAO, CARGA_HORARIA)  
-    VALUES (1, 'Programação', 'Disciplina de Programação', 60); 
- 
-  -- Inserir professor 
-  INSERT INTO PROFESSOR (ID, NOME)  
-    VALUES (1, 'Carlos Alberto'); 
- 
-  -- Inserir turma 
-  INSERT INTO TURMA (ID, ID_DISCIPLINA, ANO, SEMESTRE)  
-    VALUES (1, 1, 2024, '1º'); 
- 
-  -- Inserir matrícula 
-  INSERT INTO MATRICULA (ID_ALUNO, ID_TURMA)  
-    VALUES (1, 1); 
- 
-  COMMIT; 
+Exemplos:
+
+• Excluir um aluno pelo ID:
+BEGIN
+  PKG_ALUNO.excluir_aluno(101); -- Troque o 101 pelo ID do aluno.
+END; 
+
+• Listar alunos maiores de 18 anos:
+DECLARE
+  CURSOR c IS PKG_ALUNO.listar_maiores_de_18;
+  r c%ROWTYPE;
+BEGIN
+  OPEN c;
+  LOOP
+    FETCH c INTO r;
+    EXIT WHEN c%NOTFOUND;
+    DBMS_OUTPUT.PUT_LINE('Nome: ' || r.nome || ' | Nascimento: ' || r.data_nascimento);
+  END LOOP;
+  CLOSE c;
 END;
-
--- Criar o pacote
-CREATE OR REPLACE PACKAGE PKG_DISCIPLINA AS 
-  PROCEDURE CADASTRAR_DISCIPLINA(P_NOME IN VARCHAR2, P_DESCRICAO IN VARCHAR2, P_CARGA_HORARIA IN NUMBER); 
-  FUNCTION CURSOR_TOTAL_ALUNOS RETURN SYS_REFCURSOR; 
-  FUNCTION CURSOR_MEDIA_IDADE(P_ID_DISCIPLINA IN NUMBER) RETURN NUMBER; 
-  PROCEDURE LISTAR_ALUNOS_DISCIPLINA(P_ID_DISCIPLINA IN NUMBER); 
-END PKG_DISCIPLINA;
-
--- Criar o corpo do pacote
-CREATE OR REPLACE PACKAGE BODY PKG_DISCIPLINA AS 
-  PROCEDURE CADASTRAR_DISCIPLINA(P_NOME IN VARCHAR2, P_DESCRICAO IN VARCHAR2, P_CARGA_HORARIA IN NUMBER) IS 
-  BEGIN 
-    -- Inserir disciplina na tabela DISCIPLINA
-    INSERT INTO DISCIPLINA (NOME, DESCRICAO, CARGA_HORARIA) 
-    VALUES (P_NOME, P_DESCRICAO, P_CARGA_HORARIA); 
-  END CADASTRAR_DISCIPLINA; 
- 
-  FUNCTION CURSOR_TOTAL_ALUNOS RETURN SYS_REFCURSOR IS 
-    C_DISCIPLINAS SYS_REFCURSOR; 
-  BEGIN 
-    -- Consulta para total de alunos por disciplina
-    OPEN C_DISCIPLINAS FOR 
-      SELECT D.NOME, COUNT(M.ID_ALUNO) AS TOTAL_ALUNOS 
-      FROM DISCIPLINA D 
-      JOIN TURMA T ON D.ID = T.ID_DISCIPLINA 
-      JOIN MATRICULA M ON T.ID = M.ID_TURMA 
-      GROUP BY D.NOME 
-      HAVING COUNT(M.ID_ALUNO) > 10; 
-    RETURN C_DISCIPLINAS; 
-  END CURSOR_TOTAL_ALUNOS; 
- 
-  FUNCTION CURSOR_MEDIA_IDADE(P_ID_DISCIPLINA IN NUMBER) RETURN NUMBER IS 
-    V_MEDIA NUMBER; 
-  BEGIN 
-    -- Consulta para calcular a média de idade dos alunos de uma disciplina
-    SELECT AVG(TRUNC(MONTHS_BETWEEN(SYSDATE, A.DATA_NASCIMENTO) / 12)) 
-    INTO V_MEDIA 
-    FROM ALUNO A 
-    JOIN MATRICULA M ON A.ID = M.ID_ALUNO 
-    JOIN TURMA T ON M.ID_TURMA = T.ID 
-    WHERE T.ID_DISCIPLINA = P_ID_DISCIPLINA; 
-    RETURN V_MEDIA; 
-  END CURSOR_MEDIA_IDADE; 
- 
-  PROCEDURE LISTAR_ALUNOS_DISCIPLINA(P_ID_DISCIPLINA IN NUMBER) IS 
-  BEGIN 
-    -- Loop para listar os alunos matriculados em uma disciplina
-    FOR R_ALUNO IN ( 
-      SELECT A.NOME 
-      FROM ALUNO A 
-      JOIN MATRICULA M ON A.ID = M.ID_ALUNO 
-      JOIN TURMA T ON M.ID_TURMA = T.ID 
-      WHERE T.ID_DISCIPLINA = P_ID_DISCIPLINA 
-    ) LOOP 
-      DBMS_OUTPUT.PUT_LINE(R_ALUNO.NOME); 
-    END LOOP; 
-  END LISTAR_ALUNOS_DISCIPLINA; 
- 
-END PKG_DISCIPLINA;
-# Atividade-PL-SQL
